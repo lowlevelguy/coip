@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -33,18 +34,30 @@ int main (int argc, char** argv) {
 		return -1;
 	}
 
-	if (connect(sock, &server_addr, sizeof(server_addr)) != 0) {
+	if (connect(sock, (struct sockaddr*) &server_addr, sizeof(server_addr)) != 0) {
 		perror("Could not connect to server");
 		return -1;
 	}
 
+	// Getting arithmetic operation from input
 	float op1, op2;
-	char operator;
-	if (scanf("[ %f , %f , %c ]", &op1, &op2, &operator) != 3) {
-		fprintf(stderr, "Unrecognized pattern. Expected input: [operand1, operand2, operator].\n");
-	}
+	char operator = 0, req[256] = {0}, res[256] = {0};
+	
+	printf("First operand? ");
+	scanf("%f", &op1);
 
-	printf("%f %c %f\n", op1, operator, op2);
+	printf("Second operand? ");
+	scanf("%f", &op2);
+
+	printf("Operator? [+, -, *, /] ");
+	scanf(" %c", &operator);
+
+	snprintf(req, sizeof(req), "[%f, %f, %c]", op1, op2, operator);
+
+	send(sock, req, strlen(req), 0);
+
+	recv(sock, res, sizeof(res), 0);
+	printf("Server response: %s\n", res);
 
 	return 0;
 }
