@@ -8,10 +8,17 @@
 
 #define MIDDLEMAN_PORT 3333
 #define BUFFER_SIZE 1024
+<<<<<<< HEAD
 #define CORRUPTION_PROBABILITY 10
 
 void corrupt_message(char *msg, int length) {
     if (length <= 1) return;
+=======
+#define CORRUPTION_PROBABILITY 10  
+
+void corrupt_message(char *msg, int length) {
+    if (length <= 1) return; 
+>>>>>>> origin/master
 
     int pos = rand() % (length - 1);
 
