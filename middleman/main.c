@@ -8,15 +8,13 @@
 
 #define MIDDLEMAN_PORT 3333
 #define BUFFER_SIZE 1024
-#define CORRUPTION_PROBABILITY 10  // 10% chance
+#define CORRUPTION_PROBABILITY 10  
 
 void corrupt_message(char *msg, int length) {
-    if (length <= 1) return;  // Don't corrupt empty messages or just checksum
+    if (length <= 1) return; 
 
-    // Choose a random position (excluding the checksum byte)
     int pos = rand() % (length - 1);
 
-    // Perform simple corruption (flip one bit)
     msg[pos] ^= 0x01;  // XOR with 00000001
 
     printf("Middleman corrupted byte at position %d (changed to 0x%02X)\n", pos, (unsigned char)msg[pos]);
@@ -32,7 +30,6 @@ int main(int argc, char *argv[]) {
     struct sockaddr_in middleaddr, servaddr, cliaddr;
     char buffer[BUFFER_SIZE];
 
-    // Initialize better random seed
     struct timeval tv;
     gettimeofday(&tv, NULL);
     srand((tv.tv_sec * 1000) + (tv.tv_usec / 1000));
@@ -43,19 +40,16 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
-    // Configure middleman address
     memset(&middleaddr, 0, sizeof(middleaddr));
     middleaddr.sin_family = AF_INET;
     middleaddr.sin_addr.s_addr = htonl(INADDR_ANY);
     middleaddr.sin_port = htons(MIDDLEMAN_PORT);
 
-    // Bind to middleman port
     if (bind(sockfd, (const struct sockaddr *)&middleaddr, sizeof(middleaddr)) < 0) {
         perror("bind failed");
         exit(1);
     }
 
-    // Configure server address
     memset(&servaddr, 0, sizeof(servaddr));
     servaddr.sin_family = AF_INET;
     servaddr.sin_port = htons(atoi(argv[2]));
@@ -73,7 +67,6 @@ int main(int argc, char *argv[]) {
             corrupt_message(buffer, n);
         }
 
-        // Forward to server
         sendto(sockfd, buffer, n, 0,
               (const struct sockaddr *)&servaddr, sizeof(servaddr));
 
