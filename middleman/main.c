@@ -6,18 +6,20 @@
 #include <time.h>
 #include <sys/time.h>
 
-#define MIDDLEMAN_PORT 3333
+#define MIDDLEMAN_PORT 2222
 #define BUFFER_SIZE 1024
-#define CORRUPTION_PROBABILITY 10 
+#define CORRUPTION_PROBABILITY 25 
 
 void corrupt_message(char *msg, int length) {
     if (length <= 1) return;  
     
-    int pos = rand() % (length - 1);
+    int r = rand();
+    int pos = r % (length - 1);
+    int bit_pos = r % 8;
 
-    msg[pos] ^= 0x01; 
+    msg[pos] ^= 1 << bit_pos; 
 
-    printf("Middleman corrupted byte at position %d (changed to 0x%02X)\n", pos, (unsigned char)msg[pos]);
+    printf("Middleman corrupted %dth bit of byte at position %d (changed to %#02x).\n", (r%8)+1, pos, msg[pos]);
 }
 
 int main(int argc, char *argv[]) {
@@ -27,7 +29,7 @@ int main(int argc, char *argv[]) {
     }
 
     int sockfd;
-    struct sockaddr_in middleaddr, servaddr, cliaddr;
+    struct sockaddr_in middleaddr = {0}, servaddr = {0}, cliaddr = {0};
     char buffer[BUFFER_SIZE];
 
     // Initialize better random seed
@@ -42,24 +44,22 @@ int main(int argc, char *argv[]) {
     }
 
     // Configure middleman address
-    memset(&middleaddr, 0, sizeof(middleaddr));
     middleaddr.sin_family = AF_INET;
     middleaddr.sin_addr.s_addr = htonl(INADDR_ANY);
     middleaddr.sin_port = htons(MIDDLEMAN_PORT);
 
     // Bind to middleman port
-    if (bind(sockfd, (const struct sockaddr *)&middleaddr, sizeof(middleaddr)) < 0) {
+    if (bind(sockfd, (const struct sockaddr*)&middleaddr, sizeof(middleaddr)) < 0) {
         perror("bind failed");
         exit(1);
     }
 
     // Configure server address
-    memset(&servaddr, 0, sizeof(servaddr));
     servaddr.sin_family = AF_INET;
     servaddr.sin_port = htons(atoi(argv[2]));
     servaddr.sin_addr.s_addr = inet_addr(argv[1]);
 
-    printf("Middleman running on port %d (10%% corruption chance)...\n", MIDDLEMAN_PORT);
+    printf("Middleman running on port %d (%d%% corruption chance)...\n", MIDDLEMAN_PORT, CORRUPTION_PROBABILITY);
 
     while (1) {
         socklen_t addr_len = sizeof(cliaddr);
@@ -71,12 +71,12 @@ int main(int argc, char *argv[]) {
         }
 
         sendto(sockfd, buffer, n, 0,
-              (const struct sockaddr *)&servaddr, sizeof(servaddr));
+                (const struct sockaddr *)&servaddr, sizeof(servaddr));
 
         n = recvfrom(sockfd, buffer, BUFFER_SIZE, 0,
-                    (struct sockaddr *)&servaddr, &addr_len);
+                (struct sockaddr *)&servaddr, &addr_len);
         sendto(sockfd, buffer, n, 0,
-              (const struct sockaddr *)&cliaddr, addr_len);
+                (const struct sockaddr *)&cliaddr, addr_len);
     }
 
     close(sockfd);
