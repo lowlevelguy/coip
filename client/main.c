@@ -45,12 +45,10 @@ int main (int argc, char** argv) {
 
     printf("%f %c %f\n", op1, operator, op2);
 
-    // === New code: format and send the message to the server ===
     char message[100];
     snprintf(message, sizeof(message), "%f,%f,%c", op1, op2, operator);
     send(sock, message, strlen(message), 0);
 
-    // === New code: receive the response from the server ===
     char buffer[1024] = {0};
     recv(sock, buffer, sizeof(buffer), 0);
     printf("Result from server: %s\n", buffer);
