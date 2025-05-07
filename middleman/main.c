@@ -8,16 +8,14 @@
 
 #define MIDDLEMAN_PORT 3333
 #define BUFFER_SIZE 1024
-#define CORRUPTION_PROBABILITY 10  // 10% chance
+#define CORRUPTION_PROBABILITY 10 
 
 void corrupt_message(char *msg, int length) {
-    if (length <= 1) return;  // Don't corrupt empty messages or just checksum
-
-    // Choose a random position (excluding the checksum byte)
+    if (length <= 1) return;  
+    
     int pos = rand() % (length - 1);
 
-    // Perform simple corruption (flip one bit)
-    msg[pos] ^= 0x01;  // XOR with 00000001
+    msg[pos] ^= 0x01; 
 
     printf("Middleman corrupted byte at position %d (changed to 0x%02X)\n", pos, (unsigned char)msg[pos]);
 }
@@ -68,16 +66,13 @@ int main(int argc, char *argv[]) {
         int n = recvfrom(sockfd, buffer, BUFFER_SIZE, 0,
                         (struct sockaddr *)&cliaddr, &addr_len);
 
-        // Only corrupt with 10% probability
         if (rand() % 100 < CORRUPTION_PROBABILITY) {
             corrupt_message(buffer, n);
         }
 
-        // Forward to server
         sendto(sockfd, buffer, n, 0,
               (const struct sockaddr *)&servaddr, sizeof(servaddr));
 
-        // Forward response back to client
         n = recvfrom(sockfd, buffer, BUFFER_SIZE, 0,
                     (struct sockaddr *)&servaddr, &addr_len);
         sendto(sockfd, buffer, n, 0,
