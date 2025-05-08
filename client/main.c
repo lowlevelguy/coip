@@ -39,15 +39,16 @@ int main (int argc, char** argv) {
 
     float op1, op2;
     char operator;
-    if (scanf("[ %f , %f , %c ]", &op1, &op2, &operator) != 3) {
-        fprintf(stderr, "Unrecognized pattern. Expected input: [operand1, operand2, operator].\n");
-        return -1;
-    }
-
-    printf("%f %c %f\n", op1, operator, op2);
+    
+    printf("Operand 1? ");
+    scanf("%f", &op1);
+    printf("Operand 2? ");
+    scanf("%f", &op2);
+    printf("Operator [+, -, *, /]? ");
+    scanf(" %c", &operator);
 
     char message[100];
-    snprintf(message, sizeof(message), "%f,%f,%c", op1, op2, operator);
+    snprintf(message, sizeof(message), "[%f,%f,%c]", op1, op2, operator);
     send(sock, message, strlen(message), 0);
 
     char buffer[1024] = {0};

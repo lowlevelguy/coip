@@ -11,74 +11,79 @@
 #define CORRUPTION_PROBABILITY 25 
 
 void corrupt_message(char *msg, int length) {
-    if (length <= 1) return;  
-    
-    int r = rand();
-    int pos = r % (length - 1);
-    int bit_pos = r % 8;
+	if (length <= 1) return;  
+	
+	int r = rand();
+	int pos = r % (length - 1);
+	int bit_pos = r % 8;
 
-    msg[pos] ^= 1 << bit_pos; 
+	msg[pos] ^= 1 << bit_pos; 
 
-    printf("Middleman corrupted %dth bit of byte at position %d (changed to %#02x).\n", (r%8)+1, pos, msg[pos]);
+	printf("Middleman corrupted %dth bit of byte at position %d (changed to %#02x).\n", (r%8)+1, pos, msg[pos]);
 }
 
 int main(int argc, char *argv[]) {
-    if (argc != 3) {
-        printf("Usage: %s [server ip] [server port]\n", argv[0]);
-        exit(1);
-    }
+	if (argc != 3) {
+		printf("Usage: %s [server ip] [server port]\n", argv[0]);
+		exit(1);
+	}
 
-    int sockfd;
-    struct sockaddr_in middleaddr = {0}, servaddr = {0}, cliaddr = {0};
-    char buffer[BUFFER_SIZE];
+	// Set random seed
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+	srand((tv.tv_sec * 1000) + (tv.tv_usec / 1000));
 
-    // Initialize better random seed
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    srand((tv.tv_sec * 1000) + (tv.tv_usec / 1000));
+	// Create sockets
+	int srv_sock, cli_sock;
+	if ((srv_sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+		perror("Server socket creation failed");
+		return -1;
+	}
+	if ((cli_sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+		perror("Client socket creation failed");
+		return -1;
+	}
+	
+	struct sockaddr_in middleaddr = {0}, servaddr = {0}, cliaddr = {0};
+	char buffer[BUFFER_SIZE];
 
-    // Create socket
-    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-        perror("socket creation failed");
-        exit(1);
-    }
+	// Configure middleman address
+	middleaddr.sin_family = AF_INET;
+	middleaddr.sin_addr.s_addr = INADDR_ANY;
+	middleaddr.sin_port = htons(MIDDLEMAN_PORT);
 
-    // Configure middleman address
-    middleaddr.sin_family = AF_INET;
-    middleaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    middleaddr.sin_port = htons(MIDDLEMAN_PORT);
+	// Bind server socket to port
+	// Binding the client socket is unnecessary
+	if (bind(srv_sock, (struct sockaddr*) &middleaddr, sizeof(middleaddr)) < 0) {
+		perror("Failed to bind server socket");
+		exit(1);
+	}
 
-    // Bind to middleman port
-    if (bind(sockfd, (const struct sockaddr*)&middleaddr, sizeof(middleaddr)) < 0) {
-        perror("bind failed");
-        exit(1);
-    }
+	// Configure server address
+	servaddr.sin_family = AF_INET;
+	servaddr.sin_port = htons(atoi(argv[2]));
+	inet_pton(AF_INET, argv[1], &servaddr.sin_addr);
 
-    // Configure server address
-    servaddr.sin_family = AF_INET;
-    servaddr.sin_port = htons(atoi(argv[2]));
-    servaddr.sin_addr.s_addr = inet_addr(argv[1]);
+	printf("Middleman running on port %d (%d%% corruption chance)...\n", MIDDLEMAN_PORT, CORRUPTION_PROBABILITY);
 
-    printf("Middleman running on port %d (%d%% corruption chance)...\n", MIDDLEMAN_PORT, CORRUPTION_PROBABILITY);
+	socklen_t addr_len = sizeof(cliaddr);
+	int n = recvfrom(sockfd, buffer, BUFFER_SIZE, 0,
+					(struct sockaddr *)&cliaddr, &addr_len);
 
-    while (1) {
-        socklen_t addr_len = sizeof(cliaddr);
-        int n = recvfrom(sockfd, buffer, BUFFER_SIZE, 0,
-                        (struct sockaddr *)&cliaddr, &addr_len);
+	if (rand() % 100 < CORRUPTION_PROBABILITY) {
+		corrupt_message(buffer, n);
+	} else {
+		printf("Middleman retrasmitted message without any corruption.\n");
+	}
 
-        if (rand() % 100 < CORRUPTION_PROBABILITY) {
-            corrupt_message(buffer, n);
-        }
+	sendto(sockfd, buffer, n, 0,
+			(const struct sockaddr *)&servaddr, sizeof(servaddr));
 
-        sendto(sockfd, buffer, n, 0,
-                (const struct sockaddr *)&servaddr, sizeof(servaddr));
+	n = recvfrom(sockfd, buffer, BUFFER_SIZE, 0,
+			(struct sockaddr *)&servaddr, &addr_len);
+	sendto(sockfd, buffer, n, 0,
+			(const struct sockaddr *)&cliaddr, addr_len);
 
-        n = recvfrom(sockfd, buffer, BUFFER_SIZE, 0,
-                (struct sockaddr *)&servaddr, &addr_len);
-        sendto(sockfd, buffer, n, 0,
-                (const struct sockaddr *)&cliaddr, addr_len);
-    }
-
-    close(sockfd);
-    return 0;
+	close(sockfd);
+	return 0;
 }
