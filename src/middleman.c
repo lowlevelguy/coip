@@ -8,102 +8,106 @@
 
 #define MIDDLEMAN_PORT 8000
 #define BUFFER_SIZE 1024
-#define CORRUPTION_PROBABILITY 25 
+#define CORRUPTION_PROBABILITY 10  // 10% chance
 
 void corrupt_message(char *msg, int length) {
-	if (length <= 1) return;  
-	
-	int r = rand();
-	int pos = r % (length - 1);
-	int bit_pos = r % 8;
-
-	msg[pos] ^= 1 << bit_pos; 
-
-	printf("Middleman corrupted %dth bit of byte at position %d (changed to %#02x).\n", (r%8)+1, pos, msg[pos]);
+    if (length <= 1) return;
+    int pos = rand() % (length - 1);
+    msg[pos] ^= 0x01;
+    printf("Middleman corrupted byte at position %d\n", pos);
 }
 
 int main(int argc, char *argv[]) {
-	if (argc != 3) {
-		printf("Usage: %s [server ip] [server port]\n", argv[0]);
-		return -1;
-	}
+    if (argc != 3) {
+        printf("Usage: %s [server ip] [server port]\n", argv[0]);
+        exit(1);
+    }
 
-	// Set random seed
-	struct timeval tv;
-	gettimeofday(&tv, NULL);
-	srand((tv.tv_sec * 1000) + (tv.tv_usec / 1000));
+    // Initialize random seed
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    srand((tv.tv_sec * 1000) + (tv.tv_usec / 1000));
 
-	// Create socket to listen for client
-	int cli_sock;
-	if ((cli_sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-		perror("Failed to create client socket");
-		return -1;
-	}
-	
-	// Configure middleman address
-	struct sockaddr_in middleaddr = {0};
-	middleaddr.sin_family = AF_INET;
-	middleaddr.sin_addr.s_addr = INADDR_ANY;
-	middleaddr.sin_port = htons(MIDDLEMAN_PORT);
-	
-	if (bind(cli_sock, (struct sockaddr*) &middleaddr, sizeof(middleaddr)) < 0) {
-		perror("Failed to bind server socket");
-		return -1;
-	}
-	printf("Middleman running on port %d (%d%% corruption chance)...\n", MIDDLEMAN_PORT, CORRUPTION_PROBABILITY);
+    // Create listening socket for clients
+    int listen_sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (listen_sock < 0) {
+        perror("Socket creation failed");
+        exit(1);
+    }
 
-	// Listen for connections
-	// Backlog=1 to only accept one single connection
-	if (listen(cli_sock, 1) != 0) {
-		perror("Failed to listen for client");
-		return -1;
-	}
+    // Configure middleman address
+    struct sockaddr_in middle_addr;
+    memset(&middle_addr, 0, sizeof(middle_addr));
+    middle_addr.sin_family = AF_INET;
+    middle_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    middle_addr.sin_port = htons(MIDDLEMAN_PORT);
 
-	// Accept client connection
-	struct sockaddr_in cliaddr = {0};
-	socklen_t cliaddr_len;
-	int connfd;
-	if ((connfd = accept(cli_sock, (struct sockaddr*)&cliaddr, &cliaddr_len)) < 0) {
-		perror("Failed to accept client connection");
-		return -1;
-	}
+    // Bind and listen
+    if (bind(listen_sock, (struct sockaddr *)&middle_addr, sizeof(middle_addr)) < 0) {
+        perror("Bind failed");
+        exit(1);
+    }
+    if (listen(listen_sock, 5) < 0) {
+        perror("Listen failed");
+        exit(1);
+    }
 
-	char msg[BUFFER_SIZE];
-	size_t msg_len;
-	if ((msg_len = recv(connfd, msg, BUFFER_SIZE, 0)) < 0) {
-		perror("Failed to receive message");
-		return -1;
-	}
+    printf("Middleman running on port %d...\n", MIDDLEMAN_PORT);
 
-	// Create socket to retransmit to server
-	int srv_sock;
-	if ((srv_sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-		perror("Failed to create server socket");
-		return -1;
-	}
+    while (1) {
+        // Accept new client connection
+        struct sockaddr_in client_addr;
+        socklen_t client_len = sizeof(client_addr);
+        int client_sock = accept(listen_sock, (struct sockaddr *)&client_addr, &client_len);
+        if (client_sock < 0) {
+            perror("Accept failed");
+            continue;
+        }
 
-	// Configure server address
-	struct sockaddr_in servaddr = {0};
-	servaddr.sin_family = AF_INET;
-	servaddr.sin_port = htons(atoi(argv[2]));
-	inet_pton(AF_INET, argv[1], &servaddr.sin_addr);
+        // Create NEW server connection for each client
+        int server_sock = socket(AF_INET, SOCK_STREAM, 0);
+        if (server_sock < 0) {
+            perror("Server socket creation failed");
+            close(client_sock);
+            continue;
+        }
 
-	if (connect(srv_sock, (struct sockaddr*)&servaddr, sizeof(servaddr)) < 0) {
-		perror("Failed to connect to server");
-	}
+        // Configure server address
+        struct sockaddr_in server_addr;
+        memset(&server_addr, 0, sizeof(server_addr));
+        server_addr.sin_family = AF_INET;
+        server_addr.sin_port = htons(atoi(argv[2]));
+        server_addr.sin_addr.s_addr = inet_addr(argv[1]);
 
-	// Corrupt (or not) message before retransmission
-	if (rand() % 100 < CORRUPTION_PROBABILITY)
-		corrupt_message(msg, msg_len);
-	else
-		printf("Retransmitting message without corruption.\n");
+        // Connect to server
+        if (connect(server_sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+            perror("Connection to server failed");
+            close(client_sock);
+            close(server_sock);
+            continue;
+        }
 
-	if (send(srv_sock, msg, msg_len, 0) < 0) {
-		perror("Failed to retransmit message");
-		return -1;
-	}
+        // Forward client message to server
+        char buffer[BUFFER_SIZE];
+        int n = recv(client_sock, buffer, BUFFER_SIZE, 0);
+        if (n > 0) {
+            if (rand() % 100 < CORRUPTION_PROBABILITY) {
+                corrupt_message(buffer, n);
+            }
+            send(server_sock, buffer, n, 0);
+        }
 
-	close(srv_sock);
-	close(cli_sock);
-	return 0;
+        // Forward server response back to client
+        n = recv(server_sock, buffer, BUFFER_SIZE, 0);
+        if (n > 0) {
+            send(client_sock, buffer, n, 0);
+        }
+
+        // Close connections for this session
+        close(client_sock);
+        close(server_sock);
+    }
+
+    close(listen_sock);
+    return 0;
 }

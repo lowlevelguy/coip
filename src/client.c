@@ -3,13 +3,10 @@
 #include <stdint.h>
 #include <string.h>
 
-#include <unistd.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <netdb.h>
-
-#define BUFFER_SIZE 256
 
 int main (int argc, char** argv) {
     if (argc != 3) {
@@ -41,19 +38,18 @@ int main (int argc, char** argv) {
 
     float op1, op2;
     char operator;
-    
-    printf("Operand 1? ");
-    scanf("%f", &op1);
-    printf("Operand 2? ");
-    scanf("%f", &op2);
-    printf("Operator [+, -, *, /]? ");
-    scanf(" %c", &operator);
+    if (scanf("[ %f , %f , %c ]", &op1, &op2, &operator) != 3) {
+        fprintf(stderr, "Unrecognized pattern. Expected input: [operand1, operand2, operator].\n");
+        return -1;
+    }
 
-    char message[BUFFER_SIZE];
-    snprintf(message, sizeof(message), "[%f,%f,%c]", op1, op2, operator);
+    printf("%f %c %f\n", op1, operator, op2);
+
+    char message[100];
+    snprintf(message, sizeof(message), "%f,%f,%c", op1, op2, operator);
     send(sock, message, strlen(message), 0);
 
-    char buffer[BUFFER_SIZE] = {0};
+    char buffer[1024] = {0};
     recv(sock, buffer, sizeof(buffer), 0);
     printf("Result from server: %s\n", buffer);
 
