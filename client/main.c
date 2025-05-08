@@ -9,6 +9,8 @@
 #include <netinet/in.h>
 #include <netdb.h>
 
+#define BUFFER_SIZE 256
+
 int main (int argc, char** argv) {
     if (argc != 3) {
         fprintf(stderr, "Usage: %s [server ip] [server port]", argv[0]);
@@ -47,11 +49,11 @@ int main (int argc, char** argv) {
     printf("Operator [+, -, *, /]? ");
     scanf(" %c", &operator);
 
-    char message[100];
+    char message[BUFFER_SIZE];
     snprintf(message, sizeof(message), "[%f,%f,%c]", op1, op2, operator);
     send(sock, message, strlen(message), 0);
 
-    char buffer[1024] = {0};
+    char buffer[BUFFER_SIZE] = {0};
     recv(sock, buffer, sizeof(buffer), 0);
     printf("Result from server: %s\n", buffer);
 
