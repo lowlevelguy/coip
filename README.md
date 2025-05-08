@@ -13,7 +13,6 @@ Followingly, three binaries `client`, `middleman` and `server` will be generated
 **Important:** On Windows systems, this project will not normally compile. However, if you have Cygwin or MSYS2 installed, it should then possible to link using their provided DLLs, though I'm unsure how that is.
 
 ## Usage
----
 
 ### Client: Error checking/correction left
 ```
