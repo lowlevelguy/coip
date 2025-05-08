@@ -2,17 +2,30 @@
 
 Calculator server-client architecture that takes an operation as input from the client side, and sends it to the server-side to evaluate. A middleman is used to manually corrupt the message in order to simulate noise on a real network.
 
-## Client: in progress
+## Building
+With the gcc compiler pre-installed, simply run:
+```
+make
+```
+
+Followingly, three binaries `client`, `middleman` and `server` will be generated in the project root folder.
+
+**Important:** On Windows systems, this project will not normally compile. However, if you have Cygwin or MSYS2 installed, it should then possible to link using their provided DLLs, though I'm unsure how that is.
+
+## Usage
+---
+
+### Client: Error checking/correction left
 ```
 Usage: ./client [server ip] [server port]
 ```
 
 The client app will request the user to provide two operands and a single operation, wrap them in the following form: `[op1, op2, operation]`, and use an error detecting and/or correcting code on the message before transmitting it.
 
-In order to use the middleman trick, simply provide the middleman's ip and port instead of the server's.
+**Important:** In order to use the middleman trick, simply provide the middleman's ip and port instead of the server's.
 
 
-## Middleman: work has not begun
+### Middleman: Done
 ```
 Usage: ./middleman [server ip] [server port]
 ```
@@ -21,7 +34,7 @@ The middleman will "intercept" (not really) the message sent by the client, perh
 
 The middleman operates on the port 8000.
 
-## Server: work has not begun
+### Server: Error checking/correction left
 ```
 Usage: ./server
 ```
