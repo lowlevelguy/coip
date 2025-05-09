@@ -14,30 +14,34 @@ Followingly, three binaries `client`, `middleman` and `server` will be generated
 
 ## Usage
 
-### Client: Error checking/correction left
+### Client
 ```
-Usage: ./client [server ip] [server port]
+Usage: ./client [middleman ip] [middleman port]
 ```
 
-The client app will request the user to provide two operands and a single operation, wrap them in the following form: `[op1, op2, operation]`, and use an error detecting and/or correcting code on the message before transmitting it.
+The client app will request the user to provide two operands and a single operation. It will then wrap them in the following form: `[op1, op2, operation]`, and encode them using the Hamming(7,4) encoding, before transmitting it to the server.
 
-**Important:** In order to use the middleman trick, simply provide the middleman's ip and port instead of the server's.
+This repeats inside a while loop, until the user requests it to stop. The client then transmits an (encoded) `exit` message.
 
 
-### Middleman: Done
+### Middleman
 ```
 Usage: ./middleman [server ip] [server port]
 ```
 
-The middleman will "intercept" (not really) the message sent by the client, perhaps (but not always) corrupt it, and retransmit it to the server followingly. It will then receive the response from the server, and retransmit it back to the client.
+The middleman simulates an interception of the message sent by the client. Its role is to then perhaps (but not always) corrupt it (by flipping one bit at random), and retransmit it to the server followingly. It will then receive the response from the server, and retransmit it back to the client. The middleman does not decode the message at any stage.
 
-The middleman operates on the port 8000.
+Just as the client, this all repeats inside a while loop. The middleman compares the encoded message with the hard-coded encoding of the keyword `exit`, so that it stops when the client disconnects.
 
-### Server: Error checking/correction left
+The middleman operates on the port 2223.
+
+### Server
 ```
 Usage: ./server
 ```
 
-The server will receive the message supposed to contain the operation, check for any errors, and evaluate it, before transmitting the result back to the client.
+The server will receive the message supposed to contain the operation, check for any errors, correct them, then decode and evaluate the operation, before transmitting the result back to the client (really, to the middleman, who retransmits it).
 
-The server operates on the port 8080.
+As always, this happens inside a while loop, until an `exit` message is received.
+
+The server operates on the port 2222.

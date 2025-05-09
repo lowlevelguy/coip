@@ -61,20 +61,13 @@ int main(int argc, char *argv[]) {
 
 	// Accept client connection
 	struct sockaddr_in cliaddr = {0};
-	socklen_t cliaddr_len;
+	socklen_t cliaddr_len = sizeof(cliaddr);
 	int connfd;
 	if ((connfd = accept(cli_sock, (struct sockaddr*)&cliaddr, &cliaddr_len)) < 0) {
 		perror("Failed to accept client connection");
 		return -1;
 	}
-
-	char msg[BUFFER_SIZE];
-	size_t msg_len;
-	if ((msg_len = recv(connfd, msg, BUFFER_SIZE, 0)) < 0) {
-		perror("Failed to receive from client");
-		return -1;
-	}
-
+	
 	// Create socket to retransmit to server
 	int srv_sock;
 	if ((srv_sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
@@ -92,29 +85,45 @@ int main(int argc, char *argv[]) {
 		perror("Failed to connect to server");
 	}
 
-	// Corrupt (or not) message before retransmission
-	if (rand() % 100 < CORRUPTION_PROBABILITY)
-		corrupt_message(msg, msg_len);
-	else
-		printf("Retransmitting message without corruption.\n");
+	// Hard-coded Hamming encoding for the string "exit", to know
+	// when to shut down along with the client and server.
+	const uint8_t exit_encoded[] = {0x33, 0x5a, 0x0b, 0x69, 0x33, 0x19, 0x0b, 0x2a};
 
-	if (send(srv_sock, msg, msg_len, 0) < 0) {
-		perror("Failed to retransmit message to server");
-		return -1;
-	}
+	char msg[BUFFER_SIZE];
+	size_t msg_len;
+	int repeat = 1;
+	while(repeat) {
+		if ((msg_len = recv(connfd, msg, BUFFER_SIZE, 0)) < 0) {
+			perror("Failed to receive from client");
+			return -1;
+		}
 
-	// Receive server response
-	if ((msg_len = recv(srv_sock, msg, BUFFER_SIZE, 0)) < 0) {
-		perror("Failed to receive from server");
-		return -1;
-	}
+		if (msg_len == sizeof(exit_encoded))
+			repeat = (memcmp(msg, exit_encoded, sizeof(exit_encoded)) != 0);
 
-	printf("Received from server: %s\n", msg);
-	printf("Retransmitting to client.\n");
-	// Retransmit response to client
-	if (send(connfd, msg, msg_len, 0) < 0) {
-		perror("Failed to retransmit message to client");
-		return -1;
+		// Corrupt (or not) message before retransmission
+		if (rand() % 100 < CORRUPTION_PROBABILITY)
+			corrupt_message(msg, msg_len);
+		else
+			printf("Retransmitting message without corruption.\n");
+	
+		if (send(srv_sock, msg, msg_len, 0) < 0) {
+			perror("Failed to retransmit message to server");
+			return -1;
+		}
+	
+		// Receive server response
+		if ((msg_len = recv(srv_sock, msg, BUFFER_SIZE, 0)) < 0) {
+			perror("Failed to receive from server");
+			return -1;
+		}
+	
+		printf("Retransmitting to client.\n");
+		// Retransmit response to client
+		if (send(connfd, msg, msg_len, 0) < 0) {
+			perror("Failed to retransmit message to client");
+			return -1;
+		}
 	}
 	
 	close(srv_sock);

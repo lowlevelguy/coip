@@ -71,45 +71,56 @@ int main (void) {
 	}
 
 	// Receive operation and Hamming decode it
-	char msg[BUFFER_SIZE] = {0}, hamming[BUFFER_SIZE] = {0};
-	size_t msg_len = BUFFER_SIZE, hamming_len;
-	if ((hamming_len = recv(client_fd, hamming, BUFFER_SIZE, 0)) < 0) {
-		perror("Failed to receive operation");
-		return -1;
+	char msg[BUFFER_SIZE], hamming[BUFFER_SIZE];
+	size_t msg_len, hamming_len;
+	while (1) {
+		memset(msg, 0, BUFFER_SIZE);
+		memset(hamming, 0, BUFFER_SIZE);
+		msg_len = BUFFER_SIZE;
+
+		if ((hamming_len = recv(client_fd, hamming, BUFFER_SIZE, 0)) < 0) {
+			perror("Failed to receive operation");
+			return -1;
+		}
+		hamming_decode((uint8_t*)hamming, hamming_len, (uint8_t*)msg, &msg_len);
+
+		printf("Received: %s\n", msg);
+
+		if (strncmp(msg, "exit", msg_len) == 0) {
+			printf("Exiting...\n");
+			break;
+		}
+	
+		float op1, op2;
+		char op = '+', response[BUFFER_SIZE] = {0};
+		if (sscanf(msg, "[%f,%f,%c]", &op1, &op2, &op) != 3) {
+	        snprintf(response, BUFFER_SIZE, "Error: Unrecognized syntax. Expected: [operand1,operand2,operator]");
+	    }
+	
+		// Evaluate operation
+		float result;
+		switch (calculate(op1, op2, op, &result)) {
+			case 0:
+				snprintf(response, BUFFER_SIZE, "%f", result);
+				break;
+			case CALC_DIV_BY_ZERO:
+				snprintf(response, BUFFER_SIZE, "Error: Division by zero.");
+				break;
+			case CALC_INVALID_OPERATOR:
+				snprintf(response, BUFFER_SIZE, "Error: Unrecognized operator `%c`. Expected +, -, * or /.", op);
+				break;
+			default: break;
+		};
+		printf("Result: %s\n", response);
+	
+		// Encode message before sending
+		memset(hamming, 0, BUFFER_SIZE);
+		hamming_len = BUFFER_SIZE;
+		size_t response_len = strlen(response)+1;
+		hamming_encode((uint8_t*) response, response_len, (uint8_t*)hamming, &hamming_len);
+	
+		send(client_fd, hamming, hamming_len, 0);
 	}
-	hamming_decode((uint8_t*)hamming, hamming_len, (uint8_t*)msg, &msg_len);
-
-	printf("Received: %s\n", msg);
-
-	float op1, op2;
-	char op = '+', response[BUFFER_SIZE] = {0};
-	if (sscanf(msg, "[%f,%f,%c]", &op1, &op2, &op) != 3) {
-        snprintf(response, BUFFER_SIZE, "Error: Unrecognized syntax. Expected: [operand1,operand2,operator]");
-    }
-
-	// Evaluate operation
-	float result;
-	switch (calculate(op1, op2, op, &result)) {
-		case 0:
-			snprintf(response, BUFFER_SIZE, "%f", result);
-			break;
-		case CALC_DIV_BY_ZERO:
-			snprintf(response, BUFFER_SIZE, "Error: Division by zero.");
-			break;
-		case CALC_INVALID_OPERATOR:
-			snprintf(response, BUFFER_SIZE, "Error: Unrecognized operator `%c`. Expected +, -, * or /.", op);
-			break;
-		default: break;
-	};
-	printf("Result: %s\n", response);
-
-	// Encode 
-	memset(hamming, 0, BUFFER_SIZE);
-	hamming_len = BUFFER_SIZE;
-	size_t response_len = strlen(response)+1;
-	hamming_encode((uint8_t*) response, response_len, (uint8_t*)hamming, &hamming_len);
-
-	send(client_fd, hamming, hamming_len, 0);
 
 	close(client_fd);
 	close(sock);

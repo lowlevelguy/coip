@@ -42,38 +42,56 @@ int main (int argc, char** argv) {
 	}
 
 	float op1, op2;
-	char operator;
+	char operator, answer, msg[BUFFER_SIZE], hamming[BUFFER_SIZE];
+	size_t hamming_len, msg_len;
+	int repeat = 1;
+	while (repeat) {
+		memset(msg, 0, BUFFER_SIZE);
+		memset(hamming, 0, BUFFER_SIZE);
+		hamming_len = BUFFER_SIZE;
+
+		printf("Operand 1? ");
+		scanf("%f", &op1);
+		printf("Operand 2? ");
+		scanf("%f", &op2);
+		printf("Operator [+, -, *, /]? ");
+		scanf(" %c", &operator);
 	
-	printf("Operand 1? ");
-	scanf("%f", &op1);
-	printf("Operand 2? ");
-	scanf("%f", &op2);
-	printf("Operator [+, -, *, /]? ");
-	scanf(" %c", &operator);
-
-	// Send operation after Hamming encoding
-	char msg[BUFFER_SIZE] = {0}, hamming[BUFFER_SIZE]={0};
-	size_t hamming_len = BUFFER_SIZE, msg_len = strlen(msg)+1;
-	snprintf(msg, sizeof(msg), "[%f,%f,%c]", op1, op2, operator);
-	hamming_encode((uint8_t*)msg, msg_len, (uint8_t*)hamming, &hamming_len);
-
-	if (send(sock, hamming, hamming_len, 0) < 0) {
-		perror("Failed to send operation");
-		return -1;
-	}
-
-
-	// Receive result and Hamming decode it
-	memset(hamming, 0, BUFFER_SIZE);
-	if ((hamming_len = recv(sock, hamming, BUFFER_SIZE, 0)) < 0) {
-		perror("Failed to receive response");
-		return -1;
-	}
-
-	msg_len = BUFFER_SIZE;
-	hamming_decode((uint8_t*)hamming, hamming_len, (uint8_t*)msg, &msg_len);
+		// Send operation after Hamming encoding
+		msg_len = snprintf(msg, sizeof(msg), "[%f,%f,%c]", op1, op2, operator);
+		hamming_encode((uint8_t*)msg, msg_len, (uint8_t*)hamming, &hamming_len);
 	
-	printf("Result from server: %s\n", msg);
+		if (send(sock, hamming, hamming_len, 0) < 0) {
+			perror("Failed to send operation");
+			return -1;
+		}
+	
+		// Receive result and Hamming decode it
+		memset(hamming, 0, hamming_len);
+		if ((hamming_len = recv(sock, hamming, BUFFER_SIZE, 0)) < 0) {
+			perror("Failed to receive response");
+			return -1;
+		}
+	
+		msg_len = BUFFER_SIZE;
+		hamming_decode((uint8_t*)hamming, hamming_len, (uint8_t*)msg, &msg_len);
+		
+		printf("Result from server: %s\n", msg);
+
+		printf("Another operation? [y/n] ");
+		scanf(" %c", &answer);
+		repeat = (answer == 'y');
+
+		if (!repeat) {
+			snprintf(msg, sizeof("exit"), "exit");
+			hamming_encode((uint8_t*)msg, msg_len, (uint8_t*)hamming, &hamming_len);
+			if (send(sock, hamming, hamming_len, 0) < 0) {
+				perror("Failed to send exit message");
+				return -1;
+			}
+		}
+
+	}
 
 	close(sock);
 	return 0;
