@@ -1,89 +1,107 @@
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-#include <arpa/inet.h>
-#include <math.h>
-#include <stdbool.h>
 
-#define PORT 8080
+#include <unistd.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+
+#define PORT 2222
 #define BUFFER_SIZE 1024
 
-double calculate(double op1, double op2, char operation) {
-    switch(operation) {
-        case '+': return op1 + op2;
-        case '-': return op1 - op2;
-        case '*': return op1 * op2;
-        case '/':
-            if(op2 == 0) return NAN;
-            return op1 / op2;
-        default: return NAN;
-    }
+#define CALC_DIV_BY_ZERO -1
+#define CALC_INVALID_OPERATOR -2
+
+int calculate(double op1, double op2, char operation, float* res) {
+	switch(operation) {
+		case '+':
+			*res = op1 + op2;
+			break;
+		case '-':
+			*res = op1 - op2;
+			break;
+		case '*':
+			*res = op1 * op2;
+			break;
+		case '/':
+			if(op2 == 0) return CALC_DIV_BY_ZERO;
+			*res = op1 / op2;
+			break;
+		default: return CALC_INVALID_OPERATOR;
+	}
+	return 0;
 }
 
-int main() {
-    int server_fd, new_socket;
-    struct sockaddr_in address;
-    int opt = 1;
-    int addrlen = sizeof(address);
-    char buffer[BUFFER_SIZE] = {0};
+int main (void) {
+	int sock;
 
-    if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
-        perror("socket failed");
-        exit(EXIT_FAILURE);
+	if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+		perror("Failed to create socket");
+		return -1;
+	}
+
+	// Setup server address and port
+	struct sockaddr_in addr;
+	addr.sin_family = AF_INET;
+	addr.sin_addr.s_addr = INADDR_ANY;
+	addr.sin_port = htons(PORT);
+
+	if (bind(sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+		perror("Failed to bind socket");
+		return -1;
+	}
+	
+	printf("Calculator server running on port %d...\n", PORT);
+
+	// Listen for exactly one connection
+	if (listen(sock, 1) < 0) {
+		perror("Failed to listen for connections");
+		return -1;
+	}
+
+	// Accept connection
+	int client_fd;
+	struct sockaddr_in client_addr;
+	socklen_t client_addr_len;
+	if ((client_fd = accept(sock, (struct sockaddr*)&client_addr, &client_addr_len)) < 0) {
+		perror("Failed to accept connection");
+		return -1;
+	}
+
+	// Receive operation
+	char msg[BUFFER_SIZE] = {0};
+	size_t msg_len;
+	if ((msg_len = recv(client_fd, msg, BUFFER_SIZE, 0)) < 0) {
+		perror("Failed to receive operation");
+		return -1;
+	}
+
+	printf("Received: %s\n", msg);
+
+	float op1, op2;
+	char op = '+', response[BUFFER_SIZE] = {0};
+	if (sscanf(msg, "[%f,%f,%c]", &op1, &op2, &op) != 3) {
+        snprintf(response, BUFFER_SIZE, "Error: Unrecognized syntax. Expected: [operand1,operand2,operator]");
     }
 
-    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))) {
-        perror("setsockopt");
-        exit(EXIT_FAILURE);
-    }
+	// Evaluate operation
+	float result;
+	switch (calculate(op1, op2, op, &result)) {
+		case 0:
+			snprintf(response, BUFFER_SIZE, "%f", result);
+			break;
+		case CALC_DIV_BY_ZERO:
+			snprintf(response, BUFFER_SIZE, "Error: Division by zero.");
+			break;
+		case CALC_INVALID_OPERATOR:
+			snprintf(response, BUFFER_SIZE, "Error: Unrecognized operator `%c`. Expected +, -, * or /.", op);
+			break;
+		default: break;
+	};
 
-    address.sin_family = AF_INET;
-    address.sin_addr.s_addr = INADDR_ANY;
-    address.sin_port = htons(PORT);
+	printf("Sending: %s\n", response);
+	send(client_fd, response, strlen(response)+1, 0);
 
-    if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
-        perror("bind failed");
-        exit(EXIT_FAILURE);
-    }
-
-    if (listen(server_fd, 3) < 0) {
-        perror("listen");
-        exit(EXIT_FAILURE);
-    }
-
-    printf("Calculator server running on port %d...\n", PORT);
-
-    while (1) {
-        if ((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen)) < 0) {
-            perror("accept");
-            continue;
-        }
-
-        int valread = read(new_socket, buffer, BUFFER_SIZE);
-        buffer[valread] = '\0';
-        printf("Received: %s\n", buffer);  // Debug print
-
-        float op1, op2;
-        char op;
-        if (sscanf(buffer, "%f %f %c", &op1, &op2, &op) != 3) {
-            char* error_msg = "ERROR: Invalid input format";
-            send(new_socket, error_msg, strlen(error_msg), 0);
-            close(new_socket);
-            continue;
-        }
-
-        double result = calculate(op1, op2, op);
-        char response[100];
-        if (isnan(result)) {
-            snprintf(response, sizeof(response), "ERROR: Invalid operation");
-        } else {
-            snprintf(response, sizeof(response), "%.2f", result);
-        }
-
-        printf("Sending: %s\n", response);  // Debug print
-        send(new_socket, response, strlen(response), 0);
-        close(new_socket);
-    }
-    return 0;
+	close(client_fd);
+	close(sock);
+	return 0;
 }

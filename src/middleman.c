@@ -6,9 +6,9 @@
 #include <time.h>
 #include <sys/time.h>
 
-#define MIDDLEMAN_PORT 8000
+#define MIDDLEMAN_PORT 2223
 #define BUFFER_SIZE 1024
-#define CORRUPTION_PROBABILITY 25 
+#define CORRUPTION_PROBABILITY 5
 
 void corrupt_message(char *msg, int length) {
 	if (length <= 1) return;  
@@ -71,7 +71,7 @@ int main(int argc, char *argv[]) {
 	char msg[BUFFER_SIZE];
 	size_t msg_len;
 	if ((msg_len = recv(connfd, msg, BUFFER_SIZE, 0)) < 0) {
-		perror("Failed to receive message");
+		perror("Failed to receive from client");
 		return -1;
 	}
 
@@ -99,10 +99,24 @@ int main(int argc, char *argv[]) {
 		printf("Retransmitting message without corruption.\n");
 
 	if (send(srv_sock, msg, msg_len, 0) < 0) {
-		perror("Failed to retransmit message");
+		perror("Failed to retransmit message to server");
 		return -1;
 	}
 
+	// Receive server response
+	if ((msg_len = recv(srv_sock, msg, BUFFER_SIZE, 0)) < 0) {
+		perror("Failed to receive from server");
+		return -1;
+	}
+
+	printf("Received from server: %s\n", msg);
+	printf("Retransmitting to client.\n");
+	// Retransmit response to client
+	if (send(connfd, msg, msg_len, 0) < 0) {
+		perror("Failed to retransmit message to client");
+		return -1;
+	}
+	
 	close(srv_sock);
 	close(cli_sock);
 	return 0;

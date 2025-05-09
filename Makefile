@@ -1,4 +1,4 @@
-all: client middleman
+all: client middleman server
 
 CC=gcc
 CFLAGS=-g -DDEBUG_MODE -Wall -Werror -Wpedantic -fsanitize=address
@@ -17,8 +17,8 @@ client: $(ODIR)/client.o
 middleman: $(ODIR)/middleman.o
 	$(CC) -o $@ $^ $(CFLAGS)
 
-#server: $(ODIR)/$(SRVDIR)/server.o
-#	$(CC) -o $@ $^ $(CFLAGS)
+server: $(ODIR)/$(SRVDIR)/server.o
+	$(CC) -o $@ $^ $(CFLAGS)
 
 .PHONY: clean
 

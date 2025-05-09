@@ -49,13 +49,21 @@ int main (int argc, char** argv) {
     printf("Operator [+, -, *, /]? ");
     scanf(" %c", &operator);
 
-    char msg[BUFFER_SIZE];
+    // Send operation
+    char msg[BUFFER_SIZE] = {0};
     snprintf(msg, sizeof(msg), "[%f,%f,%c]", op1, op2, operator);
-    send(sock, msg, strlen(msg), 0);
+    if (send(sock, msg, strlen(msg)+1, 0) < 0) {
+        perror("Failed to send operation");
+        return -1;
+    }
 
-    char buffer[BUFFER_SIZE] = {0};
-    recv(sock, buffer, sizeof(buffer), 0);
-    printf("Result from server: %s\n", buffer);
+    // Receive result
+    if (recv(sock, msg, BUFFER_SIZE, 0) < 0) {
+        perror("Failed to receive response");
+        return -1;
+    }
+
+    printf("Result from server: %s\n", msg);
 
     close(sock);
 
