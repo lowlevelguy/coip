@@ -61,23 +61,29 @@ uint8_t calculate_parity(uint8_t data, int position) {
  */
 uint8_t hamming_encode_nibble(uint8_t data) {
     uint8_t encoded = 0;
-    
-    // Place data bits in positions 3, 5, 6, 7 (indices 2, 4, 5, 6)
-    encoded |= ((data & 0x1) << 2);         // d1 to position 3
-    encoded |= ((data & 0x2) << 3);         // d2 to position 5
-    encoded |= ((data & 0x4) << 3);         // d3 to position 6
-    encoded |= ((data & 0x8) << 3);         // d4 to position 7
-    
+
+    // Extract individual data bits
+    uint8_t d3 = (data >> 0) & 1;  // Lowest bit
+    uint8_t d5 = (data >> 1) & 1;
+    uint8_t d6 = (data >> 2) & 1;
+    uint8_t d7 = (data >> 3) & 1;  // Highest bit
+
+    // Place data bits in their positions
+    encoded |= (d3 << 2);  // Position 3
+    encoded |= (d5 << 4);  // Position 5
+    encoded |= (d6 << 5);  // Position 6
+    encoded |= (d7 << 6);  // Position 7
+
     // Calculate parity bits
-    uint8_t p1 = calculate_parity(encoded, 0x1);  // positions 1, 3, 5, 7
-    uint8_t p2 = calculate_parity(encoded, 0x2);  // positions 2, 3, 6, 7
-    uint8_t p4 = calculate_parity(encoded, 0x4);  // positions 4, 5, 6, 7
-    
-    // Place parity bits
-    encoded |= p1;                // p1 at position 1
-    encoded |= (p2 << 1);         // p2 at position 2
-    encoded |= (p4 << 3);         // p4 at position 4
-    
+    uint8_t p1 = d3 ^ d5 ^ d7;
+    uint8_t p2 = d3 ^ d6 ^ d7;
+    uint8_t p4 = d5 ^ d6 ^ d7;
+
+    // Place parity bits in their positions
+    encoded |= (p1 << 0);  // Position 1
+    encoded |= (p2 << 1);  // Position 2
+    encoded |= (p4 << 3);  // Position 4
+
     return encoded;
 }
 
@@ -116,70 +122,43 @@ int hamming_encode(uint8_t* input, size_t input_size, uint8_t* output, size_t* o
 }
 
 /**
- * Detect and correct errors in a 7-bit Hamming code
- * 
- * @param encoded 7-bit encoded data
- * @return Corrected 7-bit data
- */
-uint8_t hamming_correct(uint8_t encoded) {
-    // Calculate syndrome by checking each parity bit
-    uint8_t syndrome = 0;
-    
-    // Create a copy of encoded data with parity bits cleared for checking
-    uint8_t data_for_check = encoded;
-    
-    // Clear original parity bits for checking
-    uint8_t p1_actual = encoded & 0x1;         // Position 1
-    uint8_t p2_actual = (encoded >> 1) & 0x1;  // Position 2
-    uint8_t p4_actual = (encoded >> 3) & 0x1;  // Position 4
-    
-    // Clear the parity bits to calculate expected values
-    data_for_check &= ~0x1;  // Clear p1
-    data_for_check &= ~0x2;  // Clear p2
-    data_for_check &= ~0x8;  // Clear p4
-    
-    // Calculate expected parity values
-    uint8_t p1_expected = calculate_parity(data_for_check, 0x1);
-    uint8_t p2_expected = calculate_parity(data_for_check, 0x2);
-    uint8_t p4_expected = calculate_parity(data_for_check, 0x4);
-    
-    // Check each parity bit
-    if (p1_actual != p1_expected) {
-        syndrome |= 0x1;  // p1 error
-    }
-    if (p2_actual != p2_expected) {
-        syndrome |= 0x2;  // p2 error
-    }
-    if (p4_actual != p4_expected) {
-        syndrome |= 0x4;  // p4 error
-    }
-    
-    // If syndrome is non-zero, there's an error at bit position 'syndrome'
-    if (syndrome != 0) {
-        // Flip the bit at position syndrome
-        encoded ^= (1 << (syndrome - 1));
-    }
-    
-    return encoded;
-}
-
-/**
  * Decode 7-bit Hamming code to 4-bit data
  * 
  * @param encoded 7-bit encoded data
  * @return 4-bit decoded data
  */
-uint8_t hamming_decode_7bits(uint8_t encoded) {
-    // Correct any single-bit errors
-    uint8_t corrected = hamming_correct(encoded);
-    
-    // Extract data bits from positions 3, 5, 6, 7 (indices 2, 4, 5, 6)
-    uint8_t data = 0;
-    data |= ((corrected >> 2) & 0x1);       // bit 3 -> bit 0
-    data |= ((corrected >> 4) & 0x1) << 1;  // bit 5 -> bit 1
-    data |= ((corrected >> 5) & 0x1) << 2;  // bit 6 -> bit 2
-    data |= ((corrected >> 6) & 0x1) << 3;  // bit 7 -> bit 3
-    
+uint8_t hamming_decode_nibble(uint8_t encoded) {
+    // Extract individual bits
+    uint8_t p1 = (encoded >> 0) & 1;  // Position 1
+    uint8_t p2 = (encoded >> 1) & 1;  // Position 2
+    uint8_t d3 = (encoded >> 2) & 1;  // Position 3
+    uint8_t p4 = (encoded >> 3) & 1;  // Position 4
+    uint8_t d5 = (encoded >> 4) & 1;  // Position 5
+    uint8_t d6 = (encoded >> 5) & 1;  // Position 6
+    uint8_t d7 = (encoded >> 6) & 1;  // Position 7
+
+    // Calculate syndrome (error location)
+    uint8_t s1 = p1 ^ d3 ^ d5 ^ d7;
+    uint8_t s2 = p2 ^ d3 ^ d6 ^ d7;
+    uint8_t s4 = p4 ^ d5 ^ d6 ^ d7;
+
+    uint8_t syndrome = (s4 << 2) | (s2 << 1) | s1;
+
+    // Correct error if syndrome is non-zero
+    if (syndrome != 0) {
+        // Flip the bit at position indicated by syndrome
+        printf("Hamming: Error detected at bit position %d. Fixing...\n", syndrome-1);
+        encoded ^= (1 << (syndrome - 1));
+
+        // Re-extract data bits after correction
+        d3 = (encoded >> 2) & 1;
+        d5 = (encoded >> 4) & 1;
+        d6 = (encoded >> 5) & 1;
+        d7 = (encoded >> 6) & 1;
+    }
+
+    // Reconstruct data
+    uint8_t data = (d7 << 3) | (d6 << 2) | (d5 << 1) | d3;
     return data;
 }
 
@@ -204,11 +183,11 @@ int hamming_decode(uint8_t* input, size_t input_size, uint8_t* output, size_t* o
         uint8_t low_nibble, high_nibble;
         
         // Decode first 7-bit code to 4 bits
-        low_nibble = hamming_decode_7bits(input[i]);
+        low_nibble = hamming_decode_nibble(input[i]);
         
         // If we have a second 7-bit code in this pair
         if (i + 1 < input_size) {
-            high_nibble = hamming_decode_7bits(input[i + 1]);
+            high_nibble = hamming_decode_nibble(input[i + 1]);
             
             // Combine into one byte
             output[output_idx++] = (high_nibble << 4) | low_nibble;
