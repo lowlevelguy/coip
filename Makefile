@@ -1,23 +1,28 @@
 all: client middleman server
 
 CC=gcc
-CFLAGS=-g -DDEBUG_MODE -Wall -Werror -Wpedantic -fsanitize=address
+CFLAGS=-g -DDEBUG_MODE -Wall -Werror -Wpedantic -lm
+#-fsanitize=address
 
 SRCDIR=src
 ODIR=obj
 
-OBJ=$(ODIR)/client.o $(ODIR)/middleman.o
+_DEPS=hamming.h
+DEPS=$(patsubst %,$(SRCDIR)/%,$(_DEPS))
 
-$(ODIR)/%.o: $(SRCDIR)/%.c
+_OBJ=client.o middleman.o server.o hamming.o
+OBJ=$(patsubst %,$(ODIR)/%,$(_OBJ))
+
+$(ODIR)/%.o: $(SRCDIR)/%.c $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS)
 
-client: $(ODIR)/client.o
+client: $(ODIR)/client.o $(ODIR)/hamming.o
 	$(CC) -o $@ $^ $(CFLAGS)
 
 middleman: $(ODIR)/middleman.o
 	$(CC) -o $@ $^ $(CFLAGS)
 
-server: $(ODIR)/$(SRVDIR)/server.o
+server: $(ODIR)/server.o $(ODIR)/hamming.o
 	$(CC) -o $@ $^ $(CFLAGS)
 
 .PHONY: clean

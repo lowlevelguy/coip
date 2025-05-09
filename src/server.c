@@ -1,9 +1,12 @@
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
 #include <unistd.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+
+#include "hamming.h"
 
 #define PORT 2222
 #define BUFFER_SIZE 1024
@@ -67,13 +70,14 @@ int main (void) {
 		return -1;
 	}
 
-	// Receive operation
-	char msg[BUFFER_SIZE] = {0};
-	size_t msg_len;
-	if ((msg_len = recv(client_fd, msg, BUFFER_SIZE, 0)) < 0) {
+	// Receive operation and Hamming decode it
+	char msg[BUFFER_SIZE] = {0}, hamming[BUFFER_SIZE] = {0};
+	size_t msg_len = BUFFER_SIZE, hamming_len;
+	if ((hamming_len = recv(client_fd, hamming, BUFFER_SIZE, 0)) < 0) {
 		perror("Failed to receive operation");
 		return -1;
 	}
+	hamming_decode((uint8_t*)hamming, hamming_len, (uint8_t*)msg, &msg_len);
 
 	printf("Received: %s\n", msg);
 
@@ -97,9 +101,15 @@ int main (void) {
 			break;
 		default: break;
 	};
+	printf("Result: %s\n", response);
 
-	printf("Sending: %s\n", response);
-	send(client_fd, response, strlen(response)+1, 0);
+	// Encode 
+	memset(hamming, 0, BUFFER_SIZE);
+	hamming_len = BUFFER_SIZE;
+	size_t response_len = strlen(response)+1;
+	hamming_encode((uint8_t*) response, response_len, (uint8_t*)hamming, &hamming_len);
+
+	send(client_fd, hamming, hamming_len, 0);
 
 	close(client_fd);
 	close(sock);
