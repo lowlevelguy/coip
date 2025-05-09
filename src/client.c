@@ -85,6 +85,7 @@ int main (int argc, char** argv) {
 		if (!repeat) {
 			snprintf(msg, sizeof("exit"), "exit");
 			hamming_encode((uint8_t*)msg, msg_len, (uint8_t*)hamming, &hamming_len);
+
 			if (send(sock, hamming, hamming_len, 0) < 0) {
 				perror("Failed to send exit message");
 				return -1;
